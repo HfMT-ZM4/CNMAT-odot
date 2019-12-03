@@ -239,6 +239,9 @@ void o_gui_attach_getValue(t_o_gui_attach *x, t_object *ob)
 
 void o_gui_attach_output_bundle(t_o_gui_attach *x)
 {
+ //   if( x->softlock )
+//        return;
+    
     t_osc_bndl_s *s_bnd = osc_bundle_u_serialize(x->bndl);
     t_osc_bndl_s *s_err_bnd = osc_bundle_u_serialize(x->error_bndl);
     
@@ -516,21 +519,14 @@ void o_gui_attach_fullPacket(t_o_gui_attach *x, t_symbol *msg, int argc, t_atom 
     {
 
         t_osc_bndl_u *bnd_match = NULL;
-        t_osc_bndl_u *new_internal_bndl = NULL;
 
         critical_enter(x->lock);
 
         osc_bundle_u_intersection(in_bnd, x->bndl, &bnd_match);
-        osc_bundle_u_union(bnd_match, x->bndl, &new_internal_bndl );
-        osc_bundle_u_free(x->bndl);
-        x->bndl = new_internal_bndl;
-        
-        t_osc_bndl_s *s_internal_bndl = NULL;
-        s_internal_bndl = osc_bundle_u_serialize(new_internal_bndl);
-        
+
         critical_exit(x->lock);
         
-        x->softlock = 1;
+        //x->softlock = 1;
         if( bnd_match )
         {
             t_osc_bndl_it_u *it = osc_bndl_it_u_get(bnd_match);
@@ -598,7 +594,21 @@ void o_gui_attach_fullPacket(t_o_gui_attach *x, t_symbol *msg, int argc, t_atom 
             }
 
             osc_bndl_it_u_destroy(it);
-
+            
+            // update in case anything else changed as a product of the new values.
+            o_gui_attach_do_iter(x);
+            
+            critical_enter(x->lock);
+            t_osc_bndl_u *new_internal_bndl = NULL;
+            osc_bundle_u_union(bnd_match, x->bndl, &new_internal_bndl );
+            osc_bundle_u_free(x->bndl);
+            x->bndl = new_internal_bndl;
+            
+            t_osc_bndl_s *s_internal_bndl = NULL;
+            s_internal_bndl = osc_bundle_u_serialize(new_internal_bndl);
+            critical_exit(x->lock);
+            
+            
             
             long del_len;
             char *del_ptr = NULL;
@@ -623,9 +633,10 @@ void o_gui_attach_fullPacket(t_o_gui_attach *x, t_symbol *msg, int argc, t_atom 
                 omax_util_outletOSC(x->error_outlet, osc_bundle_s_getLen(s_err_bndl), osc_bundle_s_getPtr(s_err_bndl) );
             }
             
-            omax_util_outletOSC(x->outlet, osc_bundle_s_getLen(s_internal_bndl), osc_bundle_s_getPtr(s_internal_bndl) );
-            x->softlock = 0;
+          //  omax_util_outletOSC(x->outlet, osc_bundle_s_getLen(s_internal_bndl), osc_bundle_s_getPtr(s_internal_bndl) );
             
+         //   x->softlock = 0;
+
             if( s_internal_bndl )
                 osc_bundle_s_deepFree(s_internal_bndl);
             
@@ -778,21 +789,25 @@ void o_gui_attach_patcher_test(t_o_gui_attach *x)
 
 t_max_err o_gui_attach_notify(t_o_gui_attach *x, t_symbol *s, t_symbol *msg, void *sender, void *data)
 {
-//    post("%s %s %p %p ", s->s_name, msg->s_name, sender, data);
+  // post("%s %s %p %p ", s->s_name, msg->s_name, sender, data);
 
-    if( x->softlock || msg == gensym("snapshotlistchanged") ) // << there are a lot of these
+    if( msg == gensym("snapshotlistchanged") ) // << there are a lot of these
     {
         return 0;
     }
+   /* else if( x->softlock )
+    {
+        printf("softlock: %s %s %p %p -- patcher: %p\n", s->s_name, msg->s_name, sender, data, x->base_patch);
+        return 0;
+    }*/
     else
     {
-       // printf("%s %s %p %p -- patcher: %p\n", s->s_name, msg->s_name, sender, data, x->base_patch);
+      //  printf("%s %s %p %p -- patcher: %p\n", s->s_name, msg->s_name, sender, data, x->base_patch);
 
         if( msg == gensym("modified") ||  msg == gensym("setvalueof"))
         {
             o_gui_attach_getValue(x, (t_object*)sender );
             o_gui_attach_output_bundle(x);
-
         }
         else if (msg == gensym("attr_modified") )
         {
