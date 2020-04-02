@@ -496,6 +496,13 @@ void oexprcodebox_doc(t_oexprcodebox *x)
     omax_doc_outletDoc(x->outlets[0]);
 }
 
+void oexprcodebox_print_callback(t_oexprcodebox *x, char *str)
+{
+	if(x && str){
+		object_post((t_object *)x, str);
+	}
+}
+
 void oexprcodebox_free(t_oexprcodebox *x)
 {
     if(x->expr){
@@ -1018,6 +1025,11 @@ int main(void)
     CLASS_ATTR_DEFAULT(c, "fontname", 0, "\"Courier New\"");
 
     CLASS_ATTR_DEFAULT(c, "rect", 0, "0. 0. 150. 30.");
+
+    t_osc_expr_rec *printfn = osc_expr_lookupFunction("print");
+    if(printfn){
+	    osc_expr_rec_setExtra(printfn, oexprcodebox_print_callback);
+    }
 
     class_register(CLASS_BOX, c);
     oexprcodebox_class = c;
